@@ -1,0 +1,374 @@
+# Builds the Gem Pop Android app (APK) in GitHub's cloud. No setup needed.
+name: Build Gem Pop APK
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Write app files
+        run: |
+          set -eu
+          mkdir -p src/com/gempop/game res/drawable res/mipmap-anydpi-v26 res/values assets
+          cat > AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.gempop.game">
+            <application android:label="Gem Pop" android:icon="@mipmap/ic_launcher" android:allowBackup="false" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+              <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait" android:configChanges="orientation|screenSize|keyboardHidden">
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN"/>
+                  <category android:name="android.intent.category.LAUNCHER"/>
+                </intent-filter>
+              </activity>
+            </application>
+          </manifest>
+          EOF
+          cat > res/values/colors.xml <<'EOF'
+          <resources><color name="ic_bg">#E0307A</color></resources>
+          EOF
+          cat > res/drawable/ic_fg.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+            <path android:fillColor="#FFFFFF" android:pathData="M54,28 L80,48 L54,82 L28,48 Z"/>
+            <path android:fillColor="#FFB25B" android:pathData="M54,36 L71,48 L54,72 L37,48 Z"/>
+          </vector>
+          EOF
+          cat > res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/ic_bg"/>
+            <foreground android:drawable="@drawable/ic_fg"/>
+          </adaptive-icon>
+          EOF
+          cat > src/com/gempop/game/MainActivity.java <<'EOF'
+          package com.gempop.game;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+              private WebView web;
+
+              @Override
+              protected void onCreate(Bundle state) {
+                  super.onCreate(state);
+                  web = new WebView(this);
+                  web.setBackgroundColor(0xFF170C2A);
+                  WebSettings s = web.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  web.setWebViewClient(new WebViewClient());
+                  setContentView(web);
+                  web.loadUrl("file:///android_asset/index.html");
+              }
+
+              @Override
+              protected void onPause() {
+                  super.onPause();
+                  web.onPause();
+              }
+
+              @Override
+              protected void onResume() {
+                  super.onResume();
+                  web.onResume();
+              }
+          }
+          EOF
+          cat > assets/index.html <<'GAMEHTML'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+          <title>Gem Pop</title>
+          <style>
+          :root{--bg:#fff0f7;--fg:#3b1048;--card:#ffffffcc;--cell:#f4d6ea;--line:#e8b4d4;--glow:#ffd0e6;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+          @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#170c2a;--fg:#fff;--card:#ffffff14;--cell:#ffffff0f;--line:#ffffff24;--glow:#43206f}}
+          :root[data-theme="dark"]{--bg:#170c2a;--fg:#fff;--card:#ffffff14;--cell:#ffffff0f;--line:#ffffff24;--glow:#43206f}
+          html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+          *{box-sizing:border-box}
+          body{--w:min(94vw,520px,calc(100dvh - 200px));margin:0;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;overflow:hidden;color:var(--fg);background:radial-gradient(circle at 50% 0,var(--glow),var(--bg) 65%) var(--bg);font:800 16px ui-rounded,"Nunito",system-ui,sans-serif;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+          #hud{width:var(--w);display:flex;gap:8px}
+          .pill{flex:1;text-align:center;line-height:1.15;padding:6px 8px;background:var(--card);border:2px solid var(--line);border-radius:14px}
+          .pill small{display:block;font-size:12px;opacity:.7}
+          .pill b{font-size:24px}
+          #bar{width:var(--w);height:12px;border-radius:8px;background:var(--card);border:2px solid var(--line);overflow:hidden}
+          #fill{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff7a8a,#ffb25b,#ffe86b);transition:width .4s}
+          #board{position:relative;width:var(--w);aspect-ratio:1;overflow:hidden;touch-action:none;border:2px solid var(--line);border-radius:18px;background:repeating-conic-gradient(var(--cell) 0 25%,#0000 0 50%) 0 0/25% 25%,var(--card)}
+          .t{position:absolute;left:0;top:0;width:12.5%;height:12.5%;padding:1.1%;transition:transform .25s cubic-bezier(.3,.8,.4,1)}
+          .g{--h:radial-gradient(circle at 32% 28%,#fffc 0 9%,#fff0 34%);width:100%;height:100%;background:var(--s,none),var(--h),linear-gradient(150deg,var(--a),var(--b))}
+          .t0{--a:#ff7a8a;--b:#d81b4a;clip-path:circle(50%)}
+          .t1{--a:#ffb25b;--b:#f0641a;clip-path:inset(4% round 30%)}
+          .t2{--a:#ffe86b;--b:#f0b000;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+          .t3{--a:#7be88a;--b:#18a34a;clip-path:polygon(50% 4%,98% 92%,2% 92%)}
+          .t4{--a:#6fd0ff;--b:#1e6fe0;clip-path:polygon(25% 3%,75% 3%,100% 50%,75% 97%,25% 97%,0 50%)}
+          .t5{--a:#d9a0ff;--b:#8b32d6;clip-path:polygon(50% 0,63% 35%,100% 38%,71% 61%,81% 100%,50% 78%,19% 100%,29% 61%,0 38%,37% 35%)}
+          .hs{--s:repeating-linear-gradient(0deg,#fff9 0 8%,#fff0 8% 18%)}
+          .vs{--s:repeating-linear-gradient(90deg,#fff9 0 8%,#fff0 8% 18%)}
+          .bm{clip-path:circle(50%);background:var(--h),conic-gradient(#ff5d73,#ffb25b,#ffe86b,#7be88a,#6fd0ff,#d9a0ff,#ff5d73)}
+          .sp{animation:gl .7s ease-in-out infinite alternate}
+          @keyframes gl{to{filter:brightness(1.35)}}
+          .sel .g{animation:sl .45s ease-in-out infinite alternate}
+          @keyframes sl{to{transform:scale(1.15)}}
+          .pop .g{animation:pp .25s ease-in forwards}
+          @keyframes pp{35%{transform:scale(1.25);filter:brightness(1.7)}to{transform:scale(0);opacity:0}}
+          @media (prefers-reduced-motion:reduce){.sp,.sel .g{animation:none}}
+          #toast{position:fixed;left:50%;top:40%;translate:-50% -50%;z-index:5;font-size:36px;font-weight:900;color:#fff;text-shadow:0 3px 0 #a0206a,0 0 18px #ff4fa8;opacity:0;pointer-events:none;white-space:nowrap}
+          #toast.on{animation:tw .9s ease-out}
+          @keyframes tw{0%{opacity:0;scale:.5}20%{opacity:1;scale:1.15}80%{opacity:1;scale:1}100%{opacity:0;scale:1.2;translate:-50% -90%}}
+          button{font:inherit;font-size:18px;color:#fff;background:linear-gradient(#ff6aa8,#e0307a);border:0;border-bottom:4px solid #a01a58;border-radius:14px;padding:10px 26px;cursor:pointer}
+          button:active{transform:translateY(2px);border-bottom-width:2px}
+          #rs{font-size:14px;padding:6px 18px;color:var(--fg);background:var(--card);border:2px solid var(--line);border-bottom-width:4px}
+          #ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0009;z-index:9;padding:20px}
+          #ov.on{display:flex}
+          .card{background:var(--bg);border:2px solid var(--line);border-radius:22px;padding:26px 28px;text-align:center;max-width:320px;box-shadow:0 20px 60px #0006}
+          .card h2{margin:0 0 8px;font-size:28px}
+          .card p{margin:0 0 18px;opacity:.85;font-weight:700;line-height:1.4;white-space:pre-line}
+          </style>
+          </head>
+          <body>
+          <div id="hud">
+          <div class="pill"><small>Level</small><b id="lv">1</b></div>
+          <div class="pill"><small>Moves</small><b id="mv">25</b></div>
+          <div class="pill" style="flex:1.4"><small id="gl">Score</small><b id="sc">0</b></div>
+          </div>
+          <div id="bar"><i id="fill"></i></div>
+          <div id="board"></div>
+          <button id="rs">Restart</button>
+          <div id="toast"></div>
+          <div id="ov"><div class="card"><h2 id="oh"></h2><p id="op"></p><button id="ob"></button></div></div>
+          <script>
+          const N=8,B=document.getElementById('board'),$=i=>document.getElementById(i),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          let g,K,level=1,goal,moves,score,busy=true,sel=null,drag=null;
+          try{level=+localStorage.getItem('gp-level')||1}catch(e){}
+          const rnd=()=>Math.random()*K|0;
+          const place=(t,r,c)=>{t.el.style.transform='translate('+c*100+'%,'+r*100+'%)'};
+          const look=t=>{t.el.firstChild.className='g '+(t.s==3?'bm sp':'t'+t.t+(t.s?(t.s==1?' hs':' vs')+' sp':''))};
+
+          function mk(r,c,t){
+            const el=document.createElement('div'),tl={t,s:0,el};
+            el.className='t';el.innerHTML='<div></div>';
+            B.appendChild(el);look(tl);place(tl,r,c);
+            return tl;
+          }
+          function upd(){
+            $('lv').textContent=level;$('mv').textContent=moves;$('sc').textContent=score;
+            $('gl').textContent='Score / '+goal;
+            $('fill').style.width=Math.min(100,score/goal*100)+'%';
+          }
+          function toast(s){const t=$('toast');t.textContent=s;t.className='';void t.offsetWidth;t.className='on'}
+          function show(h,p,b,fn){
+            $('oh').textContent=h;$('op').textContent=p;$('ob').textContent=b;
+            $('ob').onclick=()=>{$('ov').classList.remove('on');fn()};
+            $('ov').classList.add('on');
+          }
+
+          // Find every run of 3+ matching gems. d=0 rows, d=1 columns. Cells are [row,col].
+          function runs(){
+            const out=[];
+            for(let d=0;d<2;d++)for(let i=0;i<N;i++){
+              let j=0;
+              while(j<N){
+                const a=d?g[j][i]:g[i][j];
+                let k=j+1;
+                if(a&&a.t>=0){
+                  while(k<N){const b=d?g[k][i]:g[i][k];if(!b||b.t!=a.t)break;k++}
+                  if(k-j>=3){const cells=[];for(let m=j;m<k;m++)cells.push(d?[m,i]:[i,m]);out.push({cells,v:d})}
+                }
+                j=k;
+              }
+            }
+            return out;
+          }
+          // Striped gems (s=1 row, s=2 column) clear their line, and chain into other striped gems.
+          function expand(set){
+            const q=[...set];
+            while(q.length){
+              const k=q.pop(),y=k/N|0,x=k%N,t=g[y][x];
+              if(!t||!t.s||t.s==3)continue;
+              for(let i=0;i<N;i++){
+                const a=t.s==1?y*N+i:i*N+x;
+                if(!set.has(a)){set.add(a);q.push(a)}
+              }
+            }
+          }
+          async function clear(set,chain,sp){
+            expand(set);
+            sp.forEach(p=>{set.delete(p.y*N+p.x);const t=g[p.y][p.x];t.s=p.s;if(p.s==3)t.t=-1;look(t)});
+            const gone=[];
+            set.forEach(k=>{const y=k/N|0,x=k%N;if(g[y][x]){gone.push(g[y][x]);g[y][x]=null}});
+            gone.forEach(t=>t.el.classList.add('pop'));
+            score+=gone.length*10*chain;
+            if(chain>1)toast(['Sweet!','Tasty!','Juicy!','Divine!'][Math.min(chain,5)-2]);
+            upd();
+            await sleep(250);
+            gone.forEach(t=>t.el.remove());
+            fall();
+            await sleep(320);
+          }
+          function fall(){
+            const fresh=[];
+            for(let c=0;c<N;c++){
+              let w=N-1;
+              for(let r=N-1;r>=0;r--)if(g[r][c]){
+                if(r!=w){g[w][c]=g[r][c];g[r][c]=null;place(g[w][c],w,c)}
+                w--;
+              }
+              for(let r=w;r>=0;r--){const t=mk(r-w-1,c,rnd());g[r][c]=t;fresh.push([t,r,c])}
+            }
+            void B.offsetWidth;
+            fresh.forEach(([t,r,c])=>place(t,r,c));
+          }
+          async function cascade(pref,chain){
+            for(;;){
+              const rs=runs();if(!rs.length)break;
+              chain++;
+              const set=new Set(),sp=[];
+              for(const r of rs){
+                r.cells.forEach(([y,x])=>set.add(y*N+x));
+                if(r.cells.length>3){
+                  const p=r.cells.find(([y,x])=>pref.some(q=>q[0]==y&&q[1]==x))||r.cells[r.cells.length>>1];
+                  if(!g[p[0]][p[1]].s)sp.push({y:p[0],x:p[1],s:r.cells.length>4?3:r.v?1:2});
+                }
+              }
+              await clear(set,chain,sp);
+              pref=[];
+            }
+          }
+          function exch(a,b){
+            const A=g[a[0]][a[1]],C=g[b[0]][b[1]];
+            g[a[0]][a[1]]=C;g[b[0]][b[1]]=A;
+            place(C,a[0],a[1]);place(A,b[0],b[1]);
+          }
+          function canMove(){
+            for(let r=0;r<N;r++)for(let c=0;c<N;c++)for(const [dy,dx] of [[0,1],[1,0]]){
+              const y=r+dy,x=c+dx;if(y>=N||x>=N)continue;
+              const a=g[r][c],b=g[y][x];
+              if(a.s==3||b.s==3)return true;
+              g[r][c]=b;g[y][x]=a;const ok=runs().length>0;g[r][c]=a;g[y][x]=b;
+              if(ok)return true;
+            }
+            return false;
+          }
+          async function shuffle(){
+            toast('Shuffle!');
+            const all=g.flat();let n=0;
+            do{
+              for(let i=all.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[all[i],all[j]]=[all[j],all[i]]}
+              all.forEach((t,i)=>{g[i/N|0][i%N]=t});
+            }while((runs().length||!canMove())&&++n<200);
+            all.forEach((t,i)=>place(t,i/N|0,i%N));
+            await sleep(400);
+          }
+          async function swap(a,b){
+            busy=true;clearSel();
+            const A=g[a[0]][a[1]],C=g[b[0]][b[1]];
+            exch(a,b);await sleep(250);
+            const bomb=A.s==3||C.s==3;
+            if(!bomb&&!runs().length){exch(a,b);await sleep(250);busy=false;return}
+            moves--;upd();
+            if(bomb){
+              const o=A.s==3?C:A,set=new Set();
+              g.forEach((row,y)=>row.forEach((t,x)=>{if(t===A||t===C||o.s==3||t.t==o.t)set.add(y*N+x)}));
+              await clear(set,1,[]);
+            }
+            await cascade([a,b],bomb?1:0);
+            if(!canMove())await shuffle();
+            busy=false;
+            if(moves<=0)finish();
+          }
+          function finish(){
+            const st=score>=goal*2?3:score>=goal*1.5?2:1;
+            if(score>=goal)show('Level '+level+' complete!','猸�'.repeat(st)+'\nScore '+score,'Next level',()=>start(level+1));
+            else show('Out of moves','You scored '+score+' of '+goal+'. Give it another go!','Try again',()=>start(level));
+          }
+          function start(lv){
+            level=lv;K=lv<3?5:6;goal=1000+(lv-1)*500;moves=25;score=0;sel=null;
+            B.innerHTML='';
+            g=Array.from({length:N},()=>Array(N).fill(null));
+            for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+              let t;
+              do{t=rnd()}while((c>1&&g[r][c-1].t==t&&g[r][c-2].t==t)||(r>1&&g[r-1][c].t==t&&g[r-2][c].t==t));
+              g[r][c]=mk(r,c,t);
+            }
+            if(!canMove())return start(lv);
+            try{localStorage.setItem('gp-level',lv)}catch(e){}
+            upd();busy=false;
+          }
+
+          // Input: tap two neighbors, or swipe a gem toward a neighbor.
+          function cellAt(e){
+            const b=B.getBoundingClientRect(),w=B.clientWidth;
+            const c=Math.floor((e.clientX-b.left-B.clientLeft)/w*N),r=Math.floor((e.clientY-b.top-B.clientTop)/w*N);
+            return r>=0&&r<N&&c>=0&&c<N?[r,c]:null;
+          }
+          function clearSel(){if(sel){const t=g[sel[0]][sel[1]];if(t)t.el.classList.remove('sel');sel=null}}
+          function tap(p){
+            if(sel&&Math.abs(sel[0]-p[0])+Math.abs(sel[1]-p[1])==1)swap(sel,p);
+            else if(sel&&sel[0]==p[0]&&sel[1]==p[1])clearSel();
+            else{clearSel();sel=p;g[p[0]][p[1]].el.classList.add('sel')}
+          }
+          B.addEventListener('pointerdown',e=>{
+            if(busy)return;
+            const p=cellAt(e);if(!p)return;
+            drag={p,x:e.clientX,y:e.clientY,done:false};
+            B.setPointerCapture(e.pointerId);
+          });
+          B.addEventListener('pointermove',e=>{
+            if(!drag||drag.done||busy)return;
+            const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+            if(Math.max(Math.abs(dx),Math.abs(dy))<B.clientWidth/N*.35)return;
+            drag.done=true;
+            const v=Math.abs(dy)>Math.abs(dx),q=[drag.p[0]+(v?Math.sign(dy):0),drag.p[1]+(v?0:Math.sign(dx))];
+            if(q[0]>=0&&q[0]<N&&q[1]>=0&&q[1]<N)swap(drag.p,q);
+          });
+          B.addEventListener('pointerup',()=>{
+            const d=drag;drag=null;
+            if(d&&!d.done&&!busy)tap(d.p);
+          });
+          B.addEventListener('pointercancel',()=>{drag=null});
+          $('rs').onclick=()=>{if(!busy)start(level)};
+
+          start(level);
+          if(level>1)show('Welcome back','Level '+level+' is waiting.','Continue',()=>{});
+          else show('Gem Pop','Swipe a gem to swap it with its neighbor. Match 3 or more. Match 4 or 5 to make power gems.','Play',()=>{});
+          </script>
+          </body>
+          </html>
+          GAMEHTML
+      - name: Build APK
+        run: |
+          set -eux
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          BT=$(ls -d "$SDK"/build-tools/* | grep -v -- '-rc' | sort -V | tail -1)
+          PL="$SDK/platforms/android-34"
+          [ -d "$PL" ] || PL=$(ls -d "$SDK"/platforms/android-[0-9]* | grep -v ext | sort -V | tail -1)
+          JAR="$PL/android.jar"
+          mkdir -p build/cls build/dex
+          "$BT/aapt2" compile --dir res -o build/res.zip
+          "$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml --min-sdk-version 26 --target-sdk-version 34 --version-code 1 --version-name 1.0 -A assets build/res.zip
+          javac -source 8 -target 8 -bootclasspath "$JAR" -d build/cls $(find src -name '*.java')
+          "$BT/d8" --release --min-api 26 --lib "$JAR" --output build/dex $(find build/cls -name '*.class')
+          (cd build/dex && zip -q ../base.apk classes.dex)
+          "$BT/zipalign" -f -p 4 build/base.apk build/aligned.apk
+          keytool -genkeypair -keystore build/k.jks -storepass android -keypass android -alias k -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Gem Pop"
+          "$BT/apksigner" sign --ks build/k.jks --ks-pass pass:android --key-pass pass:android --out GemPop.apk build/aligned.apk
+          "$BT/apksigner" verify GemPop.apk
+          ls -l GemPop.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GemPop-apk
+          path: GemPop.apk
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "v${{ github.run_number }}" GemPop.apk --repo "$GITHUB_REPOSITORY" --title "Gem Pop APK" --notes "Tap GemPop.apk below to download it, then open it to install."
